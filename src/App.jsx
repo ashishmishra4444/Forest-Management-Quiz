@@ -22,7 +22,6 @@ import {
 } from "./lib/firebase";
 
 const WEEK_COUNT = 12;
-const TEST_TAKER_FLAG = "forest_quiz_test_taker_counted";
 
 function shuffleArray(items) {
   const copy = [...items];
@@ -187,8 +186,7 @@ function App() {
   const startQuiz = (mode, week = null) => {
     const nextQuestions = buildQuizQuestions(mode, week);
 
-    if (isRealtimeEnabled() && !window.localStorage.getItem(TEST_TAKER_FLAG)) {
-      window.localStorage.setItem(TEST_TAKER_FLAG, "true");
+    if (isRealtimeEnabled()) {
       incrementTestTakers();
     }
 
@@ -274,6 +272,14 @@ function App() {
                 <StatCard label="Questions" value={String(questionBank.length)} />
                 <StatCard label="Modes" value="2" />
                 <StatCard label="Focus" value="NPTEL" />
+              </div>
+              <div className="mt-5 flex flex-col gap-3">
+                <LiveCountChip count={activeUsers} label="Active users" live />
+                <LiveCountChip
+                  count={testTakers}
+                  label="Total quiz attempts"
+                  icon={<UserRoundCheck className="h-[18px] w-[18px]" />}
+                />
               </div>
             </div>
           </div>
@@ -468,22 +474,22 @@ function App() {
         )}
 
         <footer className="mt-6">
-          <div className="glass-panel flex flex-col gap-4 rounded-[1.5rem] border border-slate-300/70 px-5 py-4 text-sm text-slate-700 shadow-[0_12px_30px_rgba(15,23,42,0.06)] sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-semibold text-slate-950">Live Stats</p>
-              <p className="text-slate-500">
-                {isRealtimeEnabled()
-                  ? "Live presence and total test-participant tracking are enabled."
-                  : "Add Firebase env values to enable real-time user monitoring."}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-3">
-              <LiveCountChip count={activeUsers} label="Active users" live />
-              <LiveCountChip
-                count={testTakers}
-                label="Tests taken so far"
-                icon={<UserRoundCheck className="h-[18px] w-[18px]" />}
-              />
+          <div className="glass-panel rounded-[1.5rem] border border-slate-300/70 px-5 py-4 text-sm text-slate-700 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold text-slate-950">About</p>
+                <p className="text-slate-500">
+                  {isRealtimeEnabled()
+                    ? "Realtime activity tracking is enabled for all users."
+                    : "Add Firebase env values to enable real-time user monitoring."}
+                </p>
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-slate-300/80 bg-gradient-to-r from-slate-50 to-white px-4 py-2.5 text-sm text-slate-700 shadow-sm">
+              <span className="h-2.5 w-2.5 rounded-full bg-slate-900" />
+              <span className="font-medium tracking-[0.01em]">
+                Crafted by <span className="font-semibold text-slate-950">Ashish Kumar Mishra</span> for NPTEL exam practice.
+              </span>
+              </div>
             </div>
           </div>
         </footer>
