@@ -291,7 +291,7 @@ function App() {
                   <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Challenge Mode</p>
                   <h2 className="mt-2 font-display text-3xl text-slate-950 sm:text-4xl">Marathon Mode</h2>
                   <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                    Shuffle the full question bank and simulate a long-form revision sprint across all weeks.
+                    Attempt a combined quiz with questions from every week in shuffled order.
                   </p>
                 </div>
                 <div className="inline-flex items-center gap-3 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm">
