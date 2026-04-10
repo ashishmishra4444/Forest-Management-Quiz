@@ -47,7 +47,7 @@ export function Sidebar({
           onClick={onGoHome}
         />
         <SidebarItem
-          active={false}
+          active={screen === "marathon-setup"}
           icon={<BarChart3 className="h-4 w-4" />}
           label="Marathon Mode"
           onClick={onStartMarathon}
@@ -95,7 +95,7 @@ export function MobileSidebarOverlay({ open, children, onClose }) {
       onClick={onClose}
     >
       <aside
-        className={`sidebar-scroll h-full w-[305px] overflow-y-auto border-r border-forest-700 bg-forest-900 p-5 shadow-ambient transition-transform duration-300 ${
+        className={`sidebar-scroll h-full w-[88vw] max-w-[305px] overflow-y-auto border-r border-forest-700 bg-forest-900 p-4 shadow-ambient transition-transform duration-300 sm:p-5 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
         onClick={(event) => event.stopPropagation()}

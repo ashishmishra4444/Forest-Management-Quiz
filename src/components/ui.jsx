@@ -24,27 +24,29 @@ export function getOptionState(option, selectedAnswer, correctAnswer, submittedA
   return "border-slate-200 bg-slate-50 text-slate-500";
 }
 
-export function TopStatCard({ label, value }) {
+export function TopStatCard({ label, value, className = "" }) {
   return (
-    <div className="rounded-xl border border-forest-200 bg-white/90 px-4 py-3 shadow-sm">
+    <div className={`min-w-0 rounded-xl border border-forest-200 bg-white/90 px-3 py-2.5 shadow-sm sm:px-4 ${className}`}>
       <p className="text-[11px] uppercase tracking-[0.28em] text-forest-700">{label}</p>
-      <p className="mt-1 font-display text-2xl text-forest-900">{value}</p>
+      <p className="mt-1 truncate font-display text-xl text-forest-900 sm:text-2xl">{value}</p>
     </div>
   );
 }
 
-export function LiveCountChip({ count, label, icon, live = false }) {
+export function LiveCountChip({ count, label, icon, live = false, className = "" }) {
   return (
-    <div className="inline-flex h-11 min-w-[220px] items-center justify-center gap-2 rounded-full border border-forest-200 bg-white px-4 text-slate-800 shadow-sm">
+    <div
+      className={`inline-flex h-10 w-full min-w-0 flex-row items-center justify-center gap-3 rounded-full border border-forest-200 bg-white px-4 text-slate-800 shadow-sm sm:min-w-[140px] sm:w-auto ${className}`}
+    >
       {live ? (
         <span className="flex h-4 w-4 items-center justify-center shrink-0">
-          <span className="live-dot-pulse h-3 w-3 rounded-full bg-forest-500" />
+          <span className="live-dot-pulse h-3 w-3 rounded-full bg-forest-600" />
         </span>
       ) : (
         <span className="flex h-4 w-4 items-center justify-center text-bark-500 shrink-0">{icon}</span>
       )}
-      {live && <Radio className="h-4 w-4 text-forest-400 shrink-0" />}
-      <span className="whitespace-nowrap text-sm font-medium leading-none text-slate-900">
+      {live && <Radio className="h-4 w-4 shrink-0 text-forest-600" />}
+      <span className="text-center text-xs font-medium leading-tight text-slate-900 sm:whitespace-nowrap sm:text-sm">
         {label}: {count}
       </span>
     </div>
@@ -53,7 +55,7 @@ export function LiveCountChip({ count, label, icon, live = false }) {
 
 export function ScorePill({ label, value }) {
   return (
-    <div className="rounded-full border border-forest-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm">
+    <div className="w-full rounded-full border border-forest-200 bg-white px-4 py-2 text-center text-sm text-slate-700 shadow-sm sm:w-auto">
       <span className="text-forest-700">{label}: </span>
       <span className="font-semibold text-forest-900">{value}</span>
     </div>
@@ -68,9 +70,9 @@ export function ResultCard({ label, value, tone }) {
   };
 
   return (
-    <div className={`rounded-xl border p-5 shadow-sm ${toneStyles[tone]}`}>
+    <div className={`rounded-xl border p-4 shadow-sm sm:p-5 ${toneStyles[tone]}`}>
       <p className="text-sm uppercase tracking-[0.25em]">{label}</p>
-      <p className="mt-3 font-display text-4xl">{value}</p>
+      <p className="mt-3 font-display text-3xl sm:text-4xl">{value}</p>
     </div>
   );
 }
@@ -104,13 +106,13 @@ export function WeekItem({ active, label, bestScore, onClick }) {
       }`}
     >
       <div className="flex items-center justify-between gap-3">
-        <span>{label}</span>
+        <span className="min-w-0 truncate">{label}</span>
         {bestScore ? (
-          <span className={`text-xs ${active ? "text-bark-50" : "text-forest-200"}`}>
+          <span className={`shrink-0 text-xs ${active ? "text-bark-50" : "text-forest-200"}`}>
             Best: {bestScore.score}/{bestScore.total}
           </span>
         ) : (
-          <span className={`text-xs ${active ? "text-bark-100" : "text-forest-300/70"}`}>No best yet</span>
+          <span className={`shrink-0 text-xs ${active ? "text-bark-100" : "text-forest-300/70"}`}>No best yet</span>
         )}
       </div>
     </button>

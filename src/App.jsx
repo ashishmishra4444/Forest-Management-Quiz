@@ -255,8 +255,8 @@ function App() {
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-transparent text-slate-800">
-      <div className="mx-auto flex h-screen w-full max-w-[1600px] gap-0 px-0">
+    <div className="min-h-screen bg-transparent text-slate-800 lg:h-screen lg:overflow-hidden">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1600px] gap-0 px-0 lg:h-screen">
         <aside className="hidden h-full w-[310px] shrink-0 overflow-hidden border-r border-forest-700 bg-forest-900 shadow-ambient lg:block">
           <div className="sidebar-scroll h-full overflow-y-auto p-5">
             <Sidebar
@@ -281,17 +281,17 @@ function App() {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="sticky top-0 z-20 border-b border-forest-200 bg-forest-50/95 px-4 py-4 shadow-[0_10px_28px_rgba(20,60,37,0.10)] backdrop-blur-xl sm:px-6">
+          <header className="sticky top-0 z-20 border-b border-forest-200 bg-forest-50/95 px-4 py-3 shadow-[0_10px_28px_rgba(20,60,37,0.10)] backdrop-blur-xl sm:px-6 sm:py-4">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-start gap-3 sm:items-center">
                 <button
                   type="button"
                   onClick={() => setIsSidebarOpen(true)}
-                  className="inline-flex items-center justify-center rounded-full border border-forest-200 bg-white p-2.5 text-forest-800 shadow-sm lg:hidden"
+                  className="mt-0.5 inline-flex shrink-0 items-center justify-center rounded-full border border-forest-200 bg-white p-2.5 text-forest-800 shadow-sm lg:hidden"
                 >
                   <Menu className="h-5 w-5" />
                 </button>
-                <div>
+                <div className="min-w-0">
                   <p className="text-[11px] uppercase tracking-[0.28em] text-forest-700">
                     {screen === "home"
                       ? "Dashboard"
@@ -301,7 +301,7 @@ function App() {
                           ? "Marathon Setup"
                           : "Quiz Workspace"}
                   </p>
-                  <h1 className="mt-1 font-display text-2xl text-forest-900 sm:text-3xl">
+                  <h1 className="mt-1 break-words font-display text-xl leading-tight text-forest-900 sm:text-3xl">
                     {screen === "home"
                       ? "Forest Management Dashboard"
                       : screen === "marathon-setup"
@@ -317,7 +317,7 @@ function App() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-3 xl:justify-end">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:flex xl:flex-wrap xl:justify-end">
                 <TopStatCard label="Weeks" value="12" />
                 <TopStatCard label="Questions" value={String(questionBank.length)} />
                 <LiveCountChip count={activeUsers} label="Active users" live />
@@ -330,7 +330,7 @@ function App() {
             </div>
           </header>
 
-          <main className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+          <main className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-6 sm:py-4">
             {screen === "home" && (
               <HomeView
                 selectedDashboardWeek={selectedDashboardWeek}
