@@ -1,16 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowRight,
-  BarChart3,
-  CheckCircle2,
-  Leaf,
-  PauseCircle,
-  Radio,
-  RotateCcw,
-  Square,
-  Trophy,
+  Menu,
   UserRoundCheck,
-  XCircle,
 } from "lucide-react";
 import { questionBank } from "./data/questions";
 import {
@@ -20,8 +11,19 @@ import {
   subscribeToActiveUsers,
   subscribeToTestTakers,
 } from "./lib/firebase";
+import { MobileSidebarOverlay, Sidebar } from "./components/Sidebar";
+import {
+  HomeView,
+  MarathonSetupView,
+  QuizView,
+  ResultView,
+  RestModal,
+  ReviewView,
+} from "./components/Views";
+import { LiveCountChip, TopStatCard } from "./components/ui";
 
 const WEEK_COUNT = 12;
+const BEST_SCORES_KEY = "forest_quiz_best_scores";
 
 function shuffleArray(items) {
   const copy = [...items];
@@ -48,72 +50,13 @@ function buildQuizQuestions(mode, week) {
   }));
 }
 
-function getOptionState(option, selectedAnswer, correctAnswer) {
-  if (!selectedAnswer) {
-    return "border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50";
+function getStoredBestScores() {
+  try {
+    const rawValue = window.localStorage.getItem(BEST_SCORES_KEY);
+    return rawValue ? JSON.parse(rawValue) : {};
+  } catch {
+    return {};
   }
-
-  if (option === correctAnswer) {
-    return "border-emerald-500 bg-emerald-50 text-emerald-900";
-  }
-
-  if (option === selectedAnswer && selectedAnswer !== correctAnswer) {
-    return "border-rose-500 bg-rose-50 text-rose-900";
-  }
-
-  return "border-slate-200 bg-slate-50 text-slate-500";
-}
-
-function StatCard({ label, value }) {
-  return (
-    <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 shadow-sm">
-      <p className="text-[11px] uppercase tracking-[0.28em] text-slate-500">{label}</p>
-      <p className="mt-2 font-display text-3xl text-slate-950">{value}</p>
-    </div>
-  );
-}
-
-function Pill({ label, value }) {
-  return (
-    <div className="rounded-full border border-slate-300/80 bg-slate-50 px-4 py-2 text-sm text-slate-700 shadow-sm">
-      <span className="text-slate-500">{label}: </span>
-      <span className="font-semibold text-slate-950">{value}</span>
-    </div>
-  );
-}
-
-function ResultCard({ label, value, tone }) {
-  const toneStyles = {
-    emerald: "border-emerald-200 bg-emerald-50 text-emerald-900",
-    rose: "border-rose-200 bg-rose-50 text-rose-900",
-    amber: "border-amber-200 bg-amber-50 text-amber-900",
-  };
-
-  return (
-    <div className={`rounded-[1.5rem] border p-5 shadow-sm ${toneStyles[tone]}`}>
-      <p className="text-sm uppercase tracking-[0.25em]">{label}</p>
-      <p className="mt-3 font-display text-4xl">{value}</p>
-    </div>
-  );
-}
-
-function LiveCountChip({ count, label, icon, live = false }) {
-  return (
-    <div className="inline-flex items-center gap-2.5 rounded-full border border-slate-300/80 bg-white pl-3 pr-5 py-2 text-slate-800 shadow-sm">
-      {live && (
-        <span className="flex h-5 w-5 items-center justify-center shrink-0">
-          <span className="live-dot-pulse h-3.5 w-3.5 rounded-full bg-emerald-500" />
-        </span>
-      )}
-      {!live && (
-        <span className="flex h-5 w-5 items-center justify-center text-slate-600 shrink-0">{icon}</span>
-      )}
-      {live && <Radio className="h-[18px] w-[18px] text-slate-400 shrink-0" />}
-      <span className="whitespace-nowrap pr-1 text-[15px] font-medium text-slate-900 leading-none">
-        {label}: {count}
-      </span>
-    </div>
-  );
 }
 
 function App() {
@@ -124,12 +67,20 @@ function App() {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [shuffledOptions, setShuffledOptions] = useState([]);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [submittedAnswer, setSubmittedAnswer] = useState(null);
   const [score, setScore] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [incorrectCount, setIncorrectCount] = useState(0);
+  const [answerLog, setAnswerLog] = useState([]);
   const [activeUsers, setActiveUsers] = useState(0);
   const [testTakers, setTestTakers] = useState(0);
   const [isResting, setIsResting] = useState(false);
+  const [selectedDashboardWeek, setSelectedDashboardWeek] = useState(0);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isWeeksOpen, setIsWeeksOpen] = useState(true);
+  const [bestScores, setBestScores] = useState(() =>
+    typeof window === "undefined" ? {} : getStoredBestScores(),
+  );
 
   const weeklyStats = useMemo(
     () =>
@@ -141,8 +92,10 @@ function App() {
   );
 
   const currentQuestion = questions[questionIndex];
+  const selectedWeekStats = weeklyStats.find((item) => item.week === selectedDashboardWeek);
   const progressPercent = questions.length ? ((questionIndex + 1) / questions.length) * 100 : 0;
   const finalPercentage = questions.length ? Math.round((score / questions.length) * 100) : 0;
+  const missedQuestions = answerLog.filter((item) => !item.isCorrect);
 
   useEffect(() => {
     if (!isRealtimeEnabled()) {
@@ -168,10 +121,11 @@ function App() {
 
     setShuffledOptions(shuffleArray(currentQuestion.options));
     setSelectedAnswer(null);
+    setSubmittedAnswer(null);
   }, [currentQuestion]);
 
   useEffect(() => {
-    if (!isResting) {
+    if (!isResting && !isSidebarOpen) {
       document.body.style.overflow = "";
       return;
     }
@@ -181,7 +135,15 @@ function App() {
     return () => {
       document.body.style.overflow = "";
     };
-  }, [isResting]);
+  }, [isResting, isSidebarOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(BEST_SCORES_KEY, JSON.stringify(bestScores));
+  }, [bestScores]);
 
   const startQuiz = (mode, week = null) => {
     const nextQuestions = buildQuizQuestions(mode, week);
@@ -197,18 +159,59 @@ function App() {
     setScore(0);
     setCorrectCount(0);
     setIncorrectCount(0);
+    setAnswerLog([]);
+    setSubmittedAnswer(null);
     setIsResting(false);
     setScreen("quiz");
+    setIsSidebarOpen(false);
+  };
+
+  const updateBestScore = () => {
+    if (quizMode !== "week" || selectedWeek === null) {
+      return;
+    }
+
+    const total = questions.length;
+
+    setBestScores((currentScores) => {
+      const previous = currentScores[selectedWeek];
+
+      if (!previous || score > previous.score) {
+        return { ...currentScores, [selectedWeek]: { score, total } };
+      }
+
+      return currentScores;
+    });
   };
 
   const handleAnswer = (option) => {
-    if (!currentQuestion || selectedAnswer) {
+    if (!currentQuestion || submittedAnswer) {
       return;
     }
 
     setSelectedAnswer(option);
+  };
 
-    if (option === currentQuestion.correctAnswer) {
+  const handleSubmitAnswer = () => {
+    if (!currentQuestion || !selectedAnswer || submittedAnswer) {
+      return;
+    }
+
+    const option = selectedAnswer;
+    const isCorrect = option === currentQuestion.correctAnswer;
+    setSubmittedAnswer(option);
+    setAnswerLog((currentLog) => [
+      ...currentLog,
+      {
+        week: currentQuestion.week,
+        question: currentQuestion.question,
+        correctAnswer: currentQuestion.correctAnswer,
+        selectedAnswer: option,
+        isCorrect,
+      },
+    ]);
+
+    if (isCorrect) {
       setScore((value) => value + 1);
       setCorrectCount((value) => value + 1);
       return;
@@ -219,11 +222,17 @@ function App() {
 
   const handleNext = () => {
     if (questionIndex === questions.length - 1) {
+      updateBestScore();
       setScreen("result");
       return;
     }
 
     setQuestionIndex((value) => value + 1);
+  };
+
+  const handleStopQuiz = () => {
+    updateBestScore();
+    setScreen("result");
   };
 
   const handleRetake = () => {
@@ -237,291 +246,187 @@ function App() {
     setQuestions([]);
     setQuestionIndex(0);
     setSelectedAnswer(null);
+    setSubmittedAnswer(null);
     setScore(0);
     setCorrectCount(0);
     setIncorrectCount(0);
+    setAnswerLog([]);
     setIsResting(false);
   };
 
   return (
-    <div className="min-h-screen bg-transparent text-slate-800">
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-        <header className="mb-6 overflow-hidden rounded-[2rem] border border-slate-300/70 bg-white/88 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
-          <div className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[1.35fr_0.65fr] lg:p-10">
-            <div>
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-slate-300/70 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm">
-                <Leaf className="h-4 w-4 text-slate-600" />
-                NPTEL Forests & Their Management Practice Hub
-              </div>
-              <h1 className="max-w-3xl font-display text-4xl leading-tight text-slate-950 sm:text-5xl">
-                Practice forest management questions in a focused, professional quiz workspace.
-              </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                Practice week by week or launch a full marathon of all 120 questions with shuffled options, instant feedback,
-                live scoring, and mobile-friendly navigation.
-              </p>
-            </div>
+    <div className="h-screen overflow-hidden bg-transparent text-slate-800">
+      <div className="mx-auto flex h-screen w-full max-w-[1600px] gap-0 px-0">
+        <aside className="hidden h-full w-[310px] shrink-0 overflow-hidden border-r border-forest-700 bg-forest-900 shadow-ambient lg:block">
+          <div className="sidebar-scroll h-full overflow-y-auto p-5">
+            <Sidebar
+              screen={screen}
+              isWeeksOpen={isWeeksOpen}
+              setIsWeeksOpen={setIsWeeksOpen}
+              selectedDashboardWeek={selectedDashboardWeek}
+              weeklyStats={weeklyStats}
+              bestScores={bestScores}
+              onClose={() => setIsSidebarOpen(false)}
+              onGoHome={() => setScreen("home")}
+              onStartMarathon={() => {
+                setScreen("marathon-setup");
+                setIsSidebarOpen(false);
+              }}
+              onSelectWeek={(week) => {
+                setSelectedDashboardWeek(week);
+                setScreen("home");
+              }}
+            />
+          </div>
+        </aside>
 
-            <div className="glass-panel rounded-[1.75rem] border border-slate-300/70 p-5 shadow-sm">
-              <div className="flex items-center gap-3 text-slate-700">
-                <BarChart3 className="h-5 w-5" />
-                <span className="text-sm uppercase tracking-[0.25em] text-slate-500">Question Bank</span>
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <header className="sticky top-0 z-20 border-b border-forest-200 bg-forest-50/95 px-4 py-4 shadow-[0_10px_28px_rgba(20,60,37,0.10)] backdrop-blur-xl sm:px-6">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="inline-flex items-center justify-center rounded-full border border-forest-200 bg-white p-2.5 text-forest-800 shadow-sm lg:hidden"
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.28em] text-forest-700">
+                    {screen === "home"
+                      ? "Dashboard"
+                      : screen === "review"
+                        ? "Review"
+                        : screen === "marathon-setup"
+                          ? "Marathon Setup"
+                          : "Quiz Workspace"}
+                  </p>
+                  <h1 className="mt-1 font-display text-2xl text-forest-900 sm:text-3xl">
+                    {screen === "home"
+                      ? "Forest Management Dashboard"
+                      : screen === "marathon-setup"
+                        ? "Marathon Quiz Setup"
+                      : screen === "quiz"
+                        ? quizMode === "marathon"
+                          ? "Marathon Session"
+                          : `Week ${selectedWeek} Quiz`
+                        : screen === "review"
+                          ? "Missed Question Review"
+                          : "Quiz Summary"}
+                  </h1>
+                </div>
               </div>
-              <div className="mt-6 grid grid-cols-2 gap-4">
-                <StatCard label="Weeks" value="12" />
-                <StatCard label="Questions" value={String(questionBank.length)} />
-                <StatCard label="Modes" value="2" />
-                <StatCard label="Focus" value="NPTEL" />
-              </div>
-              <div className="mt-5 flex flex-col gap-3">
+
+              <div className="flex flex-wrap gap-3 xl:justify-end">
+                <TopStatCard label="Weeks" value="12" />
+                <TopStatCard label="Questions" value={String(questionBank.length)} />
                 <LiveCountChip count={activeUsers} label="Active users" live />
                 <LiveCountChip
                   count={testTakers}
-                  label="Total quiz attempts"
+                  label="Total attempts"
                   icon={<UserRoundCheck className="h-[18px] w-[18px]" />}
                 />
               </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        {screen === "home" && (
-          <main className="flex-1">
-            <section className="glass-panel rounded-[2rem] border border-slate-300/70 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] sm:p-6">
-              <button
-                type="button"
-                onClick={() => startQuiz("marathon")}
-                className="group flex w-full flex-col items-start justify-between gap-4 rounded-[1.75rem] border border-slate-300/80 bg-gradient-to-r from-slate-100 to-slate-50 p-6 text-left shadow-sm transition hover:border-slate-500 hover:shadow-md sm:flex-row sm:items-center sm:p-7"
-              >
-                <div>
-                  <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Challenge Mode</p>
-                  <h2 className="mt-2 font-display text-3xl text-slate-950 sm:text-4xl">Marathon Mode</h2>
-                  <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                    Attempt a combined quiz with questions from every week in shuffled order.
-                  </p>
-                </div>
-                <div className="inline-flex items-center gap-3 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm">
-                  Start Marathon
-                  <ArrowRight className="h-5 w-5 transition group-hover:translate-x-1" />
-                </div>
-              </button>
+          <main className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+            {screen === "home" && (
+              <HomeView
+                selectedDashboardWeek={selectedDashboardWeek}
+                selectedWeekStats={selectedWeekStats}
+                bestScores={bestScores}
+                onStartWeekQuiz={() => startQuiz("week", selectedDashboardWeek)}
+                onStartMarathon={() => setScreen("marathon-setup")}
+              />
+            )}
 
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {weeklyStats.map((item) => (
-                  <button
-                    key={item.week}
-                    type="button"
-                    onClick={() => startQuiz("week", item.week)}
-                    className="group rounded-[1.5rem] border border-slate-300/70 bg-white/92 p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-500 hover:shadow-md"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-[11px] uppercase tracking-[0.28em] text-slate-500">Week {item.week}</p>
-                        <h3 className="mt-2 font-display text-2xl text-slate-950">Assignment {item.week}</h3>
-                      </div>
-                      <Leaf className="h-5 w-5 text-slate-500 transition group-hover:rotate-12" />
-                    </div>
-                    <p className="mt-4 text-sm text-slate-600">{item.count} questions ready for practice.</p>
-                    <div className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
-                      Open Quiz
-                      <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </section>
+            {screen === "marathon-setup" && (
+              <MarathonSetupView
+                totalQuestions={questionBank.length}
+                onStartQuiz={() => startQuiz("marathon")}
+                onBackHome={handleBackHome}
+              />
+            )}
+
+            {screen === "quiz" && (
+              <QuizView
+                quizMode={quizMode}
+                selectedWeek={selectedWeek}
+                questionIndex={questionIndex}
+                questions={questions}
+                score={score}
+                correctCount={correctCount}
+                isResting={isResting}
+                setIsResting={setIsResting}
+                onStop={handleStopQuiz}
+                progressPercent={progressPercent}
+                currentQuestion={currentQuestion}
+                shuffledOptions={shuffledOptions}
+                selectedAnswer={selectedAnswer}
+                submittedAnswer={submittedAnswer}
+                onAnswer={handleAnswer}
+                onSubmitAnswer={handleSubmitAnswer}
+                onNext={handleNext}
+              />
+            )}
+
+            {screen === "result" && (
+              <ResultView
+                finalPercentage={finalPercentage}
+                quizMode={quizMode}
+                selectedWeek={selectedWeek}
+                correctCount={correctCount}
+                incorrectCount={incorrectCount}
+                score={score}
+                totalQuestions={questions.length}
+                missedQuestions={missedQuestions}
+                onReview={() => setScreen("review")}
+                onRetake={handleRetake}
+                onBackHome={handleBackHome}
+              />
+            )}
+
+            {screen === "review" && (
+              <ReviewView missedQuestions={missedQuestions} onBack={() => setScreen("result")} />
+            )}
           </main>
-        )}
+        </div>
 
-        {screen === "quiz" && currentQuestion && (
-          <main className="flex-1">
-            <section className="glass-panel rounded-[2rem] border border-slate-300/70 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] sm:p-6">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.28em] text-slate-500">
-                    {quizMode === "marathon" ? "Marathon Mode" : `Week ${selectedWeek}`}
-                  </p>
-                  <h2 className="mt-2 font-display text-3xl text-slate-950">
-                    Question {questionIndex + 1} of {questions.length}
-                  </h2>
-                </div>
-                <div className="grid grid-cols-2 gap-3 lg:flex">
-                  <Pill label="Score" value={String(score)} />
-                  <Pill label="Correct" value={String(correctCount)} />
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsResting(true)}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-300/80 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100"
-                >
-                  <PauseCircle className="h-4 w-4" />
-                  Rest
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setScreen("result")}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-300/80 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100"
-                >
-                  <Square className="h-4 w-4" />
-                  Stop
-                </button>
-              </div>
-
-              <div className="mt-6 h-3 overflow-hidden rounded-full bg-slate-200">
-                <div
-                  className="h-full rounded-full bg-slate-800 transition-all duration-300"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-
-              <article className="mt-6 rounded-[1.75rem] border border-slate-300/70 bg-white/96 p-5 shadow-sm sm:p-6">
-                <div className="mb-3 inline-flex rounded-full border border-slate-300/70 bg-slate-50 px-3 py-1 text-[11px] uppercase tracking-[0.28em] text-slate-500">
-                  Week {currentQuestion.week}
-                </div>
-                <h3 className="text-xl leading-8 text-slate-950 sm:text-2xl">{currentQuestion.question}</h3>
-
-                <div className="mt-6 grid gap-3">
-                  {shuffledOptions.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      disabled={Boolean(selectedAnswer)}
-                      onClick={() => handleAnswer(option)}
-                      className={`rounded-2xl border px-4 py-4 text-left text-sm leading-7 shadow-sm transition sm:px-5 sm:text-base ${getOptionState(
-                        option,
-                        selectedAnswer,
-                        currentQuestion.correctAnswer,
-                      )}`}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-
-                {selectedAnswer && (
-                  <div className="mt-6 flex flex-col gap-4 rounded-[1.5rem] border border-slate-300/70 bg-slate-50/85 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center gap-3">
-                      {selectedAnswer === currentQuestion.correctAnswer ? (
-                        <CheckCircle2 className="h-6 w-6 text-emerald-600" />
-                      ) : (
-                        <XCircle className="h-6 w-6 text-rose-600" />
-                      )}
-                      <p className="text-sm text-slate-700 sm:text-base">
-                        {selectedAnswer === currentQuestion.correctAnswer
-                          ? "Correct answer. Keep your streak moving."
-                          : `Incorrect. Correct answer: ${currentQuestion.correctAnswer}`}
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleNext}
-                      className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700"
-                    >
-                      {questionIndex === questions.length - 1 ? "Finish Quiz" : "Next"}
-                      <ArrowRight className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
-              </article>
-            </section>
-          </main>
-        )}
-
-        {screen === "result" && (
-          <main className="flex-1">
-            <section className="glass-panel rounded-[2rem] border border-slate-300/70 p-6 text-center shadow-[0_18px_50px_rgba(15,23,42,0.08)] sm:p-8">
-              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-slate-900 shadow-sm">
-                <Trophy className="h-10 w-10 text-white" />
-              </div>
-              <p className="mt-6 text-[11px] uppercase tracking-[0.3em] text-slate-500">Quiz Complete</p>
-              <h2 className="mt-3 font-display text-4xl text-slate-950 sm:text-5xl">{finalPercentage}%</h2>
-              <p className="mt-3 text-slate-600">
-                {quizMode === "marathon"
-                  ? "Your marathon session is complete."
-                  : `Week ${selectedWeek} practice session is complete.`}
-              </p>
-
-              <div className="mx-auto mt-8 grid max-w-3xl gap-4 sm:grid-cols-3">
-                <ResultCard label="Correct" value={String(correctCount)} tone="emerald" />
-                <ResultCard label="Incorrect" value={String(incorrectCount)} tone="rose" />
-                <ResultCard label="Total Score" value={`${score}/${questions.length}`} tone="amber" />
-              </div>
-
-              <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={handleRetake}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-900 px-6 py-3 font-semibold text-white shadow-sm transition hover:bg-slate-700"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  Retake Quiz
-                </button>
-                <button
-                  type="button"
-                  onClick={handleBackHome}
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300/80 bg-slate-50 px-6 py-3 font-semibold text-slate-800 shadow-sm transition hover:bg-slate-100"
-                >
-                  <ArrowRight className="h-4 w-4 rotate-180" />
-                  Back to Home
-                </button>
-              </div>
-            </section>
-          </main>
-        )}
-
-        <footer className="mt-6">
-          <div className="glass-panel rounded-[1.5rem] border border-slate-300/70 px-5 py-4 text-sm text-slate-700 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-semibold text-slate-950">About</p>
-                <p className="text-slate-500">
-                  {isRealtimeEnabled()
-                    ? "Realtime activity tracking is enabled for all users."
-                    : "Add Firebase env values to enable real-time user monitoring."}
-                </p>
-              </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-slate-300/80 bg-gradient-to-r from-slate-50 to-white px-4 py-2.5 text-sm text-slate-700 shadow-sm">
-              <span className="h-2.5 w-2.5 rounded-full bg-slate-900" />
-              <span className="font-medium tracking-[0.01em]">
-                Crafted by <span className="font-semibold text-slate-950">Ashish Kumar Mishra</span> for NPTEL exam practice.
-              </span>
-              </div>
-            </div>
-          </div>
-        </footer>
+        <MobileSidebarOverlay open={isSidebarOpen} onClose={() => setIsSidebarOpen(false)}>
+          <Sidebar
+            screen={screen}
+            isMobile
+            isWeeksOpen={isWeeksOpen}
+            setIsWeeksOpen={setIsWeeksOpen}
+            selectedDashboardWeek={selectedDashboardWeek}
+            weeklyStats={weeklyStats}
+            bestScores={bestScores}
+            onClose={() => setIsSidebarOpen(false)}
+            onGoHome={() => {
+              setScreen("home");
+              setIsSidebarOpen(false);
+            }}
+            onStartMarathon={() => {
+              setScreen("marathon-setup");
+              setIsSidebarOpen(false);
+            }}
+            onSelectWeek={(week) => {
+              setSelectedDashboardWeek(week);
+              setScreen("home");
+              setIsSidebarOpen(false);
+            }}
+          />
+        </MobileSidebarOverlay>
 
         {isResting && screen === "quiz" && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-[1.5rem] border border-slate-300 bg-white p-7 shadow-[0_28px_90px_rgba(15,23,42,0.28)]">
-              <h3 className="font-display text-2xl text-slate-950">Take a short rest</h3>
-              <p className="mt-3 text-sm leading-7 text-slate-600">
-                Your current progress is saved on this screen. Resume whenever you are ready, or stop the quiz and keep the score up to this point.
-              </p>
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => setIsResting(false)}
-                  className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700"
-                >
-                  Resume Quiz
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsResting(false);
-                    setScreen("result");
-                  }}
-                  className="inline-flex items-center justify-center rounded-full border border-slate-300/80 bg-slate-50 px-5 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-100"
-                >
-                  Stop Quiz
-                </button>
-              </div>
-            </div>
-          </div>
+          <RestModal
+            onResume={() => setIsResting(false)}
+            onStop={() => {
+              setIsResting(false);
+              handleStopQuiz();
+            }}
+          />
         )}
       </div>
     </div>
