@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  Leaf,
   PauseCircle,
   RotateCcw,
   Square,
@@ -15,6 +16,47 @@ import {
   TopStatCard,
 } from "./ui";
 
+export function AuthGateView({ isFirebaseReady, isLoadingSession, isSigningIn, signInError, onSignIn }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center px-4 py-8">
+      <section className="w-full max-w-xl rounded-[2rem] border border-forest-200/80 bg-white/95 p-6 shadow-[0_24px_90px_rgba(20,60,37,0.16)] backdrop-blur-sm sm:p-8">
+        <div className="inline-flex items-center gap-2 rounded-full border border-forest-200 bg-forest-50 px-4 py-2 text-sm text-forest-700">
+          <Leaf className="h-4 w-4 text-forest-600" />
+          Forest Management Hub
+        </div>
+        <h1 className="mt-5 font-display text-3xl leading-tight text-forest-900 sm:text-4xl">
+          Sign in to continue your quiz workspace.
+        </h1>
+        <p className="mt-4 text-sm leading-7 text-slate-600 sm:text-base">
+          Use Google to unlock the dashboard, keep your weekly best scores synced across devices, and preserve your study progress.
+        </p>
+
+        {!isFirebaseReady && (
+          <div className="mt-6 rounded-xl border border-bark-200 bg-bark-50 p-4 text-sm text-bark-800">
+            Firebase is not fully configured yet. Add your Firebase environment variables to enable Google sign-in and cloud sync.
+          </div>
+        )}
+
+        {signInError && (
+          <div className="mt-6 rounded-xl border border-bark-200 bg-bark-50 p-4 text-sm text-bark-800">
+            {signInError}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={onSignIn}
+          disabled={!isFirebaseReady || isSigningIn || isLoadingSession}
+          className="mt-6 inline-flex w-full items-center justify-center gap-3 rounded-full bg-forest-600 px-6 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-forest-500 disabled:cursor-not-allowed disabled:bg-forest-300"
+        >
+          <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-bold">G</span>
+          {isLoadingSession ? "Checking session..." : isSigningIn ? "Signing in..." : "Sign in with Google"}
+        </button>
+      </section>
+    </div>
+  );
+}
+
 export function HomeView({
   selectedDashboardWeek,
   selectedWeekStats,
@@ -27,10 +69,10 @@ export function HomeView({
       <section className="glass-panel rounded-2xl border border-forest-200/80 p-4 shadow-ambient sm:p-6">
         <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <div>
-            <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-forest-200 bg-forest-50 px-3 py-2 text-xs text-forest-700 sm:px-4 sm:text-sm">
+            <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-forest-200 bg-forest-50 px-3 py-2 text-[11px] leading-5 text-forest-700 sm:px-4 sm:text-sm">
               NPTEL Forests & Their Management Practice Hub
             </div>
-            <h1 className="mt-4 max-w-xl font-display text-[1.8rem] leading-tight text-forest-900 sm:max-w-2xl sm:text-3xl">
+            <h1 className="mt-4 max-w-xl font-display text-[1.55rem] leading-tight text-forest-900 sm:max-w-2xl sm:text-3xl">
               Practice forest management questions in a quiz-focused dashboard.
             </h1>
             <p className="mt-4 max-w-xl text-sm leading-6 text-slate-600 sm:leading-7">
@@ -62,7 +104,7 @@ export function HomeView({
             Open the selected assignment from the sidebar and start a focused quiz session with shuffled choices, instant feedback, and automatic best-score tracking.
           </p>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 sm:gap-4">
             <div className="rounded-xl border border-forest-200 bg-forest-50/70 p-4 sm:p-5">
               <p className="text-[11px] uppercase tracking-[0.28em] text-forest-700">Assignment</p>
               <p className="mt-2 font-display text-2xl text-forest-900 sm:text-3xl">Assignment {selectedDashboardWeek}</p>
@@ -127,7 +169,7 @@ export function MarathonSetupView({ totalQuestions, onStartQuiz, onBackHome }) {
         Review the marathon format first, then start the quiz when you are ready. This mode pulls questions from every week in shuffled order.
       </p>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+      <div className="mt-6 grid gap-3 sm:grid-cols-3 sm:gap-4">
         <TopStatCard label="Mode" value="Marathon" />
         <TopStatCard label="Weeks" value="12" />
         <TopStatCard label="Questions" value={String(totalQuestions)} />
@@ -195,7 +237,7 @@ export function QuizView({
             Question {questionIndex + 1} of {questions.length}
           </h2>
         </div>
-        <div className="grid grid-cols-2 gap-3 lg:flex">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:flex">
           <ScorePill label="Score" value={String(score)} />
           <ScorePill label="Correct" value={String(correctCount)} />
         </div>

@@ -5,14 +5,22 @@ import {
 } from "lucide-react";
 import { questionBank } from "./data/questions";
 import {
+  getFriendlyAuthError,
   incrementTestTakers,
+  isFirebaseEnabled,
   isRealtimeEnabled,
+  resolveRedirectSignIn,
+  signInWithGoogle,
+  signOutUser,
   startPresenceTracking,
+  subscribeToAuth,
   subscribeToActiveUsers,
   subscribeToTestTakers,
 } from "./lib/firebase";
+import { syncUserSession } from "./lib/scoreApi";
 import { MobileSidebarOverlay, Sidebar } from "./components/Sidebar";
 import {
+  AuthGateView,
   HomeView,
   MarathonSetupView,
   QuizView,
@@ -20,7 +28,7 @@ import {
   RestModal,
   ReviewView,
 } from "./components/Views";
-import { LiveCountChip, TopStatCard } from "./components/ui";
+import { LiveCountChip, NavbarUserChip } from "./components/ui";
 
 const WEEK_COUNT = 12;
 const BEST_SCORES_KEY = "forest_quiz_best_scores";
@@ -50,9 +58,13 @@ function buildQuizQuestions(mode, week) {
   }));
 }
 
-function getStoredBestScores() {
+function getBestScoresStorageKey(userId) {
+  return userId ? `${BEST_SCORES_KEY}_${userId}` : BEST_SCORES_KEY;
+}
+
+function getStoredBestScores(userId = "") {
   try {
-    const rawValue = window.localStorage.getItem(BEST_SCORES_KEY);
+    const rawValue = window.localStorage.getItem(getBestScoresStorageKey(userId));
     return rawValue ? JSON.parse(rawValue) : {};
   } catch {
     return {};
@@ -78,9 +90,11 @@ function App() {
   const [selectedDashboardWeek, setSelectedDashboardWeek] = useState(0);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isWeeksOpen, setIsWeeksOpen] = useState(true);
-  const [bestScores, setBestScores] = useState(() =>
-    typeof window === "undefined" ? {} : getStoredBestScores(),
-  );
+  const [user, setUser] = useState(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [signInError, setSignInError] = useState("");
+  const [bestScores, setBestScores] = useState({});
 
   const weeklyStats = useMemo(
     () =>
@@ -115,6 +129,39 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let isActive = true;
+
+    async function finishRedirectSignIn() {
+      try {
+        await resolveRedirectSignIn();
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setSignInError(error?.message ?? "Unable to finish Google sign-in.");
+      }
+    }
+
+    finishRedirectSignIn();
+
+    const unsubscribe = subscribeToAuth((nextUser) => {
+      if (!isActive) {
+        return;
+      }
+
+      setUser(nextUser);
+      setIsAuthLoading(false);
+      setSignInError("");
+    });
+
+    return () => {
+      isActive = false;
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!currentQuestion) {
       return;
     }
@@ -142,8 +189,36 @@ function App() {
       return;
     }
 
-    window.localStorage.setItem(BEST_SCORES_KEY, JSON.stringify(bestScores));
-  }, [bestScores]);
+    window.localStorage.setItem(getBestScoresStorageKey(user?.uid), JSON.stringify(bestScores));
+  }, [bestScores, user]);
+
+  useEffect(() => {
+    setBestScores(getStoredBestScores(user?.uid ?? ""));
+
+    if (!user) {
+      return () => {};
+    }
+
+    let isActive = true;
+
+    async function registerSession() {
+      try {
+        await syncUserSession();
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        console.warn("User session could not be registered in MongoDB.", error);
+      }
+    }
+
+    registerSession();
+
+    return () => {
+      isActive = false;
+    };
+  }, [user]);
 
   const startQuiz = (mode, week = null) => {
     const nextQuestions = buildQuizQuestions(mode, week);
@@ -172,16 +247,18 @@ function App() {
     }
 
     const total = questions.length;
+    const nextBestScore = { score, total };
 
     setBestScores((currentScores) => {
       const previous = currentScores[selectedWeek];
 
       if (!previous || score > previous.score) {
-        return { ...currentScores, [selectedWeek]: { score, total } };
+        return { ...currentScores, [selectedWeek]: nextBestScore };
       }
 
       return currentScores;
     });
+
   };
 
   const handleAnswer = (option) => {
@@ -254,11 +331,47 @@ function App() {
     setIsResting(false);
   };
 
+  const handleGoogleSignIn = async () => {
+    setIsSigningIn(true);
+    setSignInError("");
+
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      setSignInError(getFriendlyAuthError(error));
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    setIsSidebarOpen(false);
+    setIsResting(false);
+
+    try {
+      await signOutUser();
+    } catch (error) {
+      setSignInError(error?.message ?? "Unable to log out right now.");
+    }
+  };
+
+  if (!user) {
+    return (
+      <AuthGateView
+        isFirebaseReady={isFirebaseEnabled()}
+        isLoadingSession={isAuthLoading}
+        isSigningIn={isSigningIn}
+        signInError={signInError}
+        onSignIn={handleGoogleSignIn}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-transparent text-slate-800 lg:h-screen lg:overflow-hidden">
       <div className="mx-auto flex min-h-screen w-full max-w-[1600px] gap-0 px-0 lg:h-screen">
         <aside className="hidden h-full w-[310px] shrink-0 overflow-hidden border-r border-forest-700 bg-forest-900 shadow-ambient lg:block">
-          <div className="sidebar-scroll h-full overflow-y-auto p-5">
+          <div className="h-full p-5">
             <Sidebar
               screen={screen}
               isWeeksOpen={isWeeksOpen}
@@ -281,51 +394,70 @@ function App() {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="sticky top-0 z-20 border-b border-forest-200 bg-forest-50/95 px-4 py-3 shadow-[0_10px_28px_rgba(20,60,37,0.10)] backdrop-blur-xl sm:px-6 sm:py-4">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex min-w-0 items-start gap-3 sm:items-center">
-                <button
-                  type="button"
-                  onClick={() => setIsSidebarOpen(true)}
-                  className="mt-0.5 inline-flex shrink-0 items-center justify-center rounded-full border border-forest-200 bg-white p-2.5 text-forest-800 shadow-sm lg:hidden"
-                >
-                  <Menu className="h-5 w-5" />
-                </button>
-                <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-[0.28em] text-forest-700">
-                    {screen === "home"
-                      ? "Dashboard"
-                      : screen === "review"
-                        ? "Review"
-                        : screen === "marathon-setup"
-                          ? "Marathon Setup"
-                          : "Quiz Workspace"}
-                  </p>
-                  <h1 className="mt-1 break-words font-display text-xl leading-tight text-forest-900 sm:text-3xl">
-                    {screen === "home"
-                      ? "Forest Management Dashboard"
-                      : screen === "marathon-setup"
-                        ? "Marathon Quiz Setup"
-                      : screen === "quiz"
-                        ? quizMode === "marathon"
-                          ? "Marathon Session"
-                          : `Week ${selectedWeek} Quiz`
+          <header className="sticky top-0 z-20 border-b border-forest-200 bg-forest-50/95 px-3 py-3 shadow-[0_10px_28px_rgba(20,60,37,0.10)] backdrop-blur-xl sm:px-6 sm:py-0">
+            <div className="flex flex-col gap-3 sm:h-16 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+              <div className="flex min-w-0 items-center justify-between gap-3 sm:justify-start">
+                <div className="flex min-w-0 items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsSidebarOpen(true)}
+                    className="inline-flex shrink-0 items-center justify-center rounded-full border border-forest-200 bg-white p-2.5 text-forest-800 shadow-sm lg:hidden"
+                  >
+                    <Menu className="h-5 w-5" />
+                  </button>
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-[0.24em] text-forest-700 sm:text-[11px] sm:tracking-[0.28em]">
+                      {screen === "home"
+                        ? "Dashboard"
                         : screen === "review"
-                          ? "Missed Question Review"
-                          : "Quiz Summary"}
-                  </h1>
+                          ? "Review"
+                          : screen === "marathon-setup"
+                            ? "Marathon Setup"
+                            : "Quiz Workspace"}
+                    </p>
+                    <h1 className="mt-0.5 break-words font-display text-base leading-tight text-forest-900 sm:truncate sm:text-2xl">
+                      {screen === "home"
+                        ? "Forest Management Dashboard"
+                        : screen === "marathon-setup"
+                          ? "Marathon Quiz Setup"
+                        : screen === "quiz"
+                          ? quizMode === "marathon"
+                            ? "Marathon Session"
+                            : `Week ${selectedWeek} Quiz`
+                          : screen === "review"
+                            ? "Missed Question Review"
+                            : "Quiz Summary"}
+                    </h1>
+                  </div>
+                </div>
+
+                <div className="shrink-0 sm:hidden">
+                  <NavbarUserChip user={user} onLogout={handleLogout} />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:flex xl:flex-wrap xl:justify-end">
-                <TopStatCard label="Weeks" value="12" />
-                <TopStatCard label="Questions" value={String(questionBank.length)} />
-                <LiveCountChip count={activeUsers} label="Active users" live />
-                <LiveCountChip
-                  count={testTakers}
-                  label="Total attempts"
-                  icon={<UserRoundCheck className="h-[18px] w-[18px]" />}
-                />
+              <div className="flex min-w-0 items-center justify-between gap-3 sm:shrink-0 sm:justify-end sm:gap-4">
+                <div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-1 sm:overflow-visible sm:pb-0">
+                  <LiveCountChip
+                    count={activeUsers}
+                    label="Active Users"
+                    live
+                    className="shrink-0"
+                  />
+                  <LiveCountChip
+                    count={testTakers}
+                    label="Total attempts"
+                    icon={<UserRoundCheck className="h-[18px] w-[18px]" />}
+                    compactMobile
+                    className="shrink-0"
+                  />
+                </div>
+
+                <div className="hidden h-6 w-[1px] bg-slate-200 sm:block" />
+
+                <div className="hidden shrink-0 sm:block">
+                  <NavbarUserChip user={user} onLogout={handleLogout} />
+                </div>
               </div>
             </div>
           </header>
