@@ -28,3 +28,21 @@ export async function syncUserSession() {
 
   return data.user ?? null;
 }
+
+export async function fetchUserScores() {
+  const data = await request("/api/user-scores");
+  return data.scores ?? {};
+}
+
+export async function saveBestScore(weekId, scoreData) {
+  const data = await request("/api/user-scores", {
+    method: "PUT",
+    body: JSON.stringify({
+      weekId: String(weekId),
+      score: Number(scoreData.score ?? 0),
+      total: Number(scoreData.total ?? 0),
+    }),
+  });
+
+  return data.score ?? null;
+}

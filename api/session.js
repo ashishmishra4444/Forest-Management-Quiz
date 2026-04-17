@@ -1,4 +1,4 @@
-import { getUsersCollection, upsertUserProfile, verifyAuthHeader } from "./_lib/backend.js";
+import { getUserById, getUsersCollection, upsertUserProfile, verifyAuthHeader } from "./_lib/backend.js";
 
 export default async function handler(request, response) {
   if (request.method !== "POST") {
@@ -12,23 +12,19 @@ export default async function handler(request, response) {
     await upsertUserProfile(decodedUser);
 
     const usersCollection = await getUsersCollection();
-    const userDocument = await usersCollection.findOne(
-      { userId: decodedUser.uid },
-      {
-        projection: {
-          _id: 0,
-          userId: 1,
-          email: 1,
-          displayName: 1,
-          photoURL: 1,
-          emailVerified: 1,
-          provider: 1,
-          loginCount: 1,
-          createdAt: 1,
-          lastLoginAt: 1,
-        },
-      },
-    );
+    const userDocument = await getUserById(decodedUser.uid, {
+      _id: 0,
+      userId: 1,
+      email: 1,
+      displayName: 1,
+      photoURL: 1,
+      emailVerified: 1,
+      provider: 1,
+      loginCount: 1,
+      createdAt: 1,
+      lastLoginAt: 1,
+      scores: 1,
+    });
 
     response.status(200).json({ user: userDocument });
   } catch (error) {

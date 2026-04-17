@@ -85,11 +85,7 @@ export function HomeView({
             <TopStatCard label="Questions" value={String(selectedWeekStats?.count ?? 0)} />
             <TopStatCard
               label="Best Score"
-              value={
-                bestScores[selectedDashboardWeek]
-                  ? `${bestScores[selectedDashboardWeek].score}/${bestScores[selectedDashboardWeek].total}`
-                  : "--"
-              }
+              value={`${bestScores[selectedDashboardWeek]?.score ?? 0}/${bestScores[selectedDashboardWeek]?.total ?? 0}`}
             />
             <TopStatCard label="Mode" value="Week" />
           </div>
@@ -113,14 +109,10 @@ export function HomeView({
             <div className="rounded-xl border border-forest-200 bg-white p-4 sm:p-5">
               <p className="text-[11px] uppercase tracking-[0.28em] text-forest-700">Best Performance</p>
               <p className="mt-2 font-display text-2xl text-forest-900 sm:text-3xl">
-                {bestScores[selectedDashboardWeek]
-                  ? `${bestScores[selectedDashboardWeek].score}/${bestScores[selectedDashboardWeek].total}`
-                  : "No score"}
+                {`${bestScores[selectedDashboardWeek]?.score ?? 0}/${bestScores[selectedDashboardWeek]?.total ?? 0}`}
               </p>
               <p className="mt-3 text-sm text-slate-600">
-                {bestScores[selectedDashboardWeek]
-                  ? "Your highest score for this week is so far."
-                  : "Complete the week once to save your best score here."}
+                Your highest score for this week is so far.
               </p>
             </div>
           </div>

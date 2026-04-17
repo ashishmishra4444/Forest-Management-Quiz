@@ -87,3 +87,25 @@ export async function upsertUserProfile(decodedUser) {
     { upsert: true },
   );
 }
+
+export async function getUserById(userId, projection = {}) {
+  const usersCollection = await getUsersCollection();
+  return usersCollection.findOne({ userId }, { projection });
+}
+
+export async function saveUserBestScore(userId, weekId, scoreData) {
+  const usersCollection = await getUsersCollection();
+  await usersCollection.updateOne(
+    { userId },
+    {
+      $set: {
+        [`scores.${weekId}`]: {
+          score: Number(scoreData.score ?? 0),
+          total: Number(scoreData.total ?? 0),
+          updatedAt: new Date(),
+        },
+        updatedAt: new Date(),
+      },
+    },
+  );
+}

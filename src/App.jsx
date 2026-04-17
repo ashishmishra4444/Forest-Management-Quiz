@@ -17,7 +17,7 @@ import {
   subscribeToActiveUsers,
   subscribeToTestTakers,
 } from "./lib/firebase";
-import { syncUserSession } from "./lib/scoreApi";
+import { fetchUserScores, saveBestScore, syncUserSession } from "./lib/scoreApi";
 import { MobileSidebarOverlay, Sidebar } from "./components/Sidebar";
 import {
   AuthGateView,
@@ -62,13 +62,41 @@ function getBestScoresStorageKey(userId) {
   return userId ? `${BEST_SCORES_KEY}_${userId}` : BEST_SCORES_KEY;
 }
 
+function buildDefaultBestScores() {
+  return Array.from({ length: WEEK_COUNT }, (_, week) => {
+    const total = questionBank.filter((item) => item.week === week).length;
+    return [String(week), { score: 0, total }];
+  }).reduce((result, [week, value]) => {
+    result[week] = value;
+    return result;
+  }, {});
+}
+
 function getStoredBestScores(userId = "") {
   try {
     const rawValue = window.localStorage.getItem(getBestScoresStorageKey(userId));
-    return rawValue ? JSON.parse(rawValue) : {};
+    const parsedValue = rawValue ? JSON.parse(rawValue) : {};
+    return { ...buildDefaultBestScores(), ...parsedValue };
   } catch {
-    return {};
+    return buildDefaultBestScores();
   }
+}
+
+function mergeBestScores(localScores, remoteScores) {
+  const mergedScores = { ...localScores };
+
+  Object.entries(remoteScores ?? {}).forEach(([weekId, remoteScore]) => {
+    const localScore = mergedScores[weekId];
+
+    if (!localScore || Number(remoteScore?.score ?? 0) >= Number(localScore?.score ?? 0)) {
+      mergedScores[weekId] = {
+        score: Number(remoteScore?.score ?? 0),
+        total: Number(remoteScore?.total ?? localScore?.total ?? 0),
+      };
+    }
+  });
+
+  return mergedScores;
 }
 
 function App() {
@@ -203,13 +231,32 @@ function App() {
 
     async function registerSession() {
       try {
-        await syncUserSession();
+        const sessionUser = await syncUserSession();
+        const remoteScores = sessionUser?.scores ?? (await fetchUserScores());
+
+        if (!isActive) {
+          return;
+        }
+
+        const mergedScores = mergeBestScores(getStoredBestScores(user.uid), remoteScores);
+        setBestScores(mergedScores);
+
+        await Promise.all(
+          Object.entries(mergedScores).map(async ([weekId, scoreData]) => {
+            const remoteScore = remoteScores?.[weekId];
+
+            if (!remoteScore || Number(scoreData.score ?? 0) > Number(remoteScore.score ?? 0)) {
+              await saveBestScore(weekId, scoreData);
+            }
+          }),
+        );
       } catch (error) {
         if (!isActive) {
           return;
         }
 
-        console.warn("User session could not be registered in MongoDB.", error);
+        setBestScores(getStoredBestScores(user.uid));
+        console.warn("User session or scores could not be registered in MongoDB.", error);
       }
     }
 
@@ -258,6 +305,12 @@ function App() {
 
       return currentScores;
     });
+
+    if (user) {
+      saveBestScore(selectedWeek, nextBestScore).catch((error) => {
+        console.warn("Best score could not be synced to MongoDB.", error);
+      });
+    }
 
   };
 

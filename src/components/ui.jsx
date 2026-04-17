@@ -108,13 +108,9 @@ export function WeekItem({ active, label, bestScore, onClick }) {
     >
       <div className="flex items-center justify-between gap-3">
         <span className="min-w-0 truncate">{label}</span>
-        {bestScore ? (
-          <span className={`shrink-0 text-xs ${active ? "text-bark-50" : "text-forest-200"}`}>
-            Best: {bestScore.score}/{bestScore.total}
-          </span>
-        ) : (
-          <span className={`shrink-0 text-xs ${active ? "text-bark-100" : "text-forest-300/70"}`}>No best yet</span>
-        )}
+        <span className={`shrink-0 text-xs ${active ? "text-bark-50" : "text-forest-200"}`}>
+          Best: {bestScore?.score ?? 0}/{bestScore?.total ?? 0}
+        </span>
       </div>
     </button>
   );

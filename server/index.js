@@ -96,6 +96,22 @@ async function upsertUserProfile(decodedUser) {
   );
 }
 
+function getUserProjection() {
+  return {
+    _id: 0,
+    userId: 1,
+    email: 1,
+    displayName: 1,
+    photoURL: 1,
+    emailVerified: 1,
+    provider: 1,
+    loginCount: 1,
+    createdAt: 1,
+    lastLoginAt: 1,
+    scores: 1,
+  };
+}
+
 app.get("/api/health", (_request, response) => {
   response.json({ ok: true });
 });
@@ -105,23 +121,62 @@ app.post("/api/session", verifyAuth, async (request, response) => {
 
   const userDocument = await usersCollection.findOne(
     { userId: request.user.uid },
+    { projection: getUserProjection() },
+  );
+
+  response.json({ user: userDocument });
+});
+
+app.get("/api/user-scores", verifyAuth, async (request, response) => {
+  const userDocument = await usersCollection.findOne(
+    { userId: request.user.uid },
+    { projection: { _id: 0, scores: 1 } },
+  );
+
+  response.json({ scores: userDocument?.scores ?? {} });
+});
+
+app.put("/api/user-scores", verifyAuth, async (request, response) => {
+  const weekId = String(request.body?.weekId ?? "");
+  const score = Number(request.body?.score ?? 0);
+  const total = Number(request.body?.total ?? 0);
+
+  if (!weekId || !Number.isFinite(score) || !Number.isFinite(total)) {
+    response.status(400).json({ error: "weekId, score, and total are required." });
+    return;
+  }
+
+  await upsertUserProfile(request.user);
+
+  const userDocument = await usersCollection.findOne(
+    { userId: request.user.uid },
+    { projection: { _id: 0, [`scores.${weekId}`]: 1 } },
+  );
+
+  const previousScore = userDocument?.scores?.[weekId];
+
+  if (previousScore && Number(previousScore.score ?? 0) >= score) {
+    response.json({ saved: false, score: previousScore });
+    return;
+  }
+
+  const nextScore = {
+    score,
+    total,
+    updatedAt: new Date(),
+  };
+
+  await usersCollection.updateOne(
+    { userId: request.user.uid },
     {
-      projection: {
-        _id: 0,
-        userId: 1,
-        email: 1,
-        displayName: 1,
-        photoURL: 1,
-        emailVerified: 1,
-        provider: 1,
-        loginCount: 1,
-        createdAt: 1,
-        lastLoginAt: 1,
+      $set: {
+        [`scores.${weekId}`]: nextScore,
+        updatedAt: new Date(),
       },
     },
   );
 
-  response.json({ user: userDocument });
+  response.json({ saved: true, score: nextScore });
 });
 
 app.listen(port, () => {
